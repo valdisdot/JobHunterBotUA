@@ -49,7 +49,7 @@ public class TelegramBotJobPositionConsumer implements JobPositionConsumer, Long
     private final ExclusionService exclusionService;
     private final ProcessedUrlService processedUrlService;
     private final Collection<String> allowedUsers;
-    private final String token;
+
     private final List<Runnable> jobPositionFinders;
     private final ScheduledExecutorService internalExecutorService;
     private final String helpBody;
@@ -62,7 +62,6 @@ public class TelegramBotJobPositionConsumer implements JobPositionConsumer, Long
             Collection<String> allowedUsers
     ) {
         try {
-            this.token = token;
             ObjectMapper objectMapper = new ObjectMapper();
             client = new OkHttpTelegramClient(
                     objectMapper,
@@ -181,7 +180,6 @@ public class TelegramBotJobPositionConsumer implements JobPositionConsumer, Long
     public void stop() {
         if (application.isRunning()) {
             try {
-                application.unregisterBot(token);
                 application.stop();
             } catch (TelegramApiException e) {
                 logger.error("Error occurred while stopping Telegram client logic", e);
