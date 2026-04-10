@@ -1,0 +1,57 @@
+package com.valdisdot.jobscrapper.source;
+
+import com.valdisdot.jobscrapper.JobPosition;
+import com.valdisdot.jobscrapper.exclusion.ExclusionService;
+import com.valdisdot.jobscrapper.processed.ProcessedUrlService;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.openqa.selenium.Dimension;
+import org.openqa.selenium.PageLoadStrategy;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+
+import java.time.Duration;
+import java.util.Collection;
+import java.util.Iterator;
+
+public abstract class JobPositionSource {
+    protected final Logger logger = LogManager.getLogger(this.getClass());
+    protected final ExclusionService exclusionService;
+    protected final ProcessedUrlService processedUrlService;
+    protected final String vacanciesUrl;
+    protected final int maxPages;
+    protected final String tag;
+    protected final WebDriver driver;
+
+    public JobPositionSource(String tag, String vacanciesUrl, int maxPages, ExclusionService exclusionService, ProcessedUrlService processedUrlService) {
+        this.tag = tag;
+        this.vacanciesUrl = vacanciesUrl;
+        this.maxPages = maxPages;
+        this.exclusionService = exclusionService;
+        this.processedUrlService = processedUrlService;
+
+        ChromeOptions options = new ChromeOptions();
+
+        options.addArguments("--headless=new");
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--window-size=1920,1080");
+        options.addArguments("--disable-gpu");
+        options.setPageLoadStrategy(PageLoadStrategy.EAGER);
+
+        driver = new ChromeDriver(options);
+
+        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(30));
+        driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(30));
+        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(0));
+        driver.manage().window().setSize(new Dimension(1920, 1080));
+    }
+
+    public void close() {
+        driver.manage().deleteAllCookies();
+        driver.quit();
+    }
+
+    public abstract Iterator<Collection<JobPosition>> iterateJobPositions();
+}
