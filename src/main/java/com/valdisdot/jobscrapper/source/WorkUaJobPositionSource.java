@@ -1,90 +1,45 @@
-package com.valdisdot.jobscrapper.scraper;
+package com.valdisdot.jobscrapper.source;
 
 import com.valdisdot.jobscrapper.JobPosition;
 import com.valdisdot.jobscrapper.exclusion.ExclusionService;
 import com.valdisdot.jobscrapper.processed.ProcessedUrlService;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
-import org.openqa.selenium.*;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
+import java.util.Collection;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 
-import java.util.function.Consumer;
-
-/**
- * Scraper for job listings from work.ua website.
- * Scrapes job positions from specified vacancy paths,
- * filters them based on exclusions, and sends them
- * to the configured consumer.
- */
-public class WorkUaJobScraper implements Runnable {
-    private final Logger logger = LogManager.getLogger(this.getClass());
-    private final String vacanciesUrl;
-    private final int maxPages;
-    private final Consumer<JobPosition> jobPositionConsumer;
-    private final ExclusionService exclusionService;
-    private final ProcessedUrlService processedUrlService;
-    private final String tag;
-
-    private final WebDriver driver;
-
-    /**
-     * Creates a new WorkUaJobScraper.
-     *
-     * @param vacanciesUrl the base path for vacancies (e.g., "java")
-     * @param tag the tag for categorizing scraped jobs
-     * @param maxPages maximum number of pages to scrape
-     * @param jobPositionConsumer consumer for processed.txt job positions
-     * @param exclusionService service for filtering excluded jobs
-     * @param processedUrlService service for tracking processed.txt URLs
-     */
-    public WorkUaJobScraper(String vacanciesUrl, String tag, int maxPages, Consumer<JobPosition> jobPositionConsumer, ExclusionService exclusionService, ProcessedUrlService processedUrlService) {
-        this.vacanciesUrl = "https://www.work.ua/" + vacanciesUrl;
-        this.maxPages = maxPages;
-        this.jobPositionConsumer = jobPositionConsumer;
-        this.exclusionService = exclusionService;
-        this.processedUrlService = processedUrlService;
-        this.tag = tag;
-
-        ChromeOptions options = new ChromeOptions();
-
-        options.addArguments("--headless=new");
-        options.addArguments("--no-sandbox");
-        options.addArguments("--disable-dev-shm-usage");
-        options.addArguments("--window-size=1920,1080");
-        options.addArguments("--disable-gpu");
-        options.setPageLoadStrategy(PageLoadStrategy.EAGER);
-
-        driver = new ChromeDriver(options);
-
-        driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(30));
-        driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(30));
-        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(0));
-        driver.manage().window().setSize(new Dimension(1920, 1080));
+public class WorkUaJobPositionSource extends JobPositionSource {
+    public WorkUaJobPositionSource(String tag, String urlFilter, int maxPages, ExclusionService exclusionService, ProcessedUrlService processedUrlService) {
+        super(tag, "https://www.work.ua/" + urlFilter, maxPages, exclusionService, processedUrlService);
     }
 
-    /**
-     * Scrapes job listings from work.ua website.
-     * Iterates through pages from maxPages down to 1,
-     * extracts job information, filters by exclusions,
-     * and sends results to the consumer.
-     *
-     * @throws InterruptedException if the thread is interrupted
-     */
     @Override
-    public void run() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        logger.info("Pulling jobs...");
-        for (int page = maxPages; page >= 1; --page) {
-            logger.info("Scrapping jobs from {}/?page={}", vacanciesUrl, page);
+    public Iterator<Collection<JobPosition>> iterateJobPositions() {
+        return new WorkUaJobPositionIterator();
+    }
+
+    private class WorkUaJobPositionIterator implements Iterator<Collection<JobPosition>> {
+        private int currentPage = maxPages;
+        private WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
+        @Override
+        public boolean hasNext() {
+            return currentPage > 0;
+        }
+
+        @Override
+        public Collection<JobPosition> next() {
+            LinkedList<JobPosition> res = new LinkedList<>();
+
+            logger.info("Scrapping jobs from {}/?page={}", vacanciesUrl, currentPage);
             try {
-                String pageUrl = vacanciesUrl + "/?page=" + page;
+                String pageUrl = vacanciesUrl + "/?page=" + currentPage;
                 driver.get(pageUrl);
                 wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("#pjax-jobs-list div[data-id]")));
                 Thread.sleep(2000);
@@ -120,7 +75,7 @@ public class WorkUaJobScraper implements Runnable {
 
                                     logger.info("Got new job position: {}", href);
                                     JobPosition jobPosition = new JobPosition();
-                                    jobPosition.setTag(this.tag);
+                                    jobPosition.setTag(tag);
                                     jobPosition.setTitle(title);
 
                                     WebElement secondSibling = null;
@@ -160,7 +115,7 @@ public class WorkUaJobScraper implements Runnable {
                                     }
 
                                     jobPosition.setLink(href);
-                                    jobPositionConsumer.accept(jobPosition);
+                                    res.add(jobPosition);
                                 }
                             }
 
@@ -174,15 +129,12 @@ public class WorkUaJobScraper implements Runnable {
             } catch (InterruptedException e) {
                 logger.error("Thread was interrupted", e);
                 Thread.currentThread().interrupt();
-                return;
             } catch (Exception e) {
-                logger.error("Error during processing job listing page {}", page, e);
+                logger.error("Error during processing job listing page {}", currentPage, e);
             }
-        }
-    }
 
-    public void close() {
-        driver.manage().deleteAllCookies();
-        driver.quit();
+            currentPage--;
+            return res;
+        }
     }
 }
