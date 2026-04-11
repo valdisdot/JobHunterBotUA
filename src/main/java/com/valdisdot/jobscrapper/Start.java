@@ -3,7 +3,10 @@ package com.valdisdot.jobscrapper;
 import com.valdisdot.jobscrapper.consumer.TelegramBotJobPositionConsumer;
 import com.valdisdot.jobscrapper.exclusion.InFileExclusionService;
 import com.valdisdot.jobscrapper.processed.InFileProcessedUrlService;
-import com.valdisdot.jobscrapper.scraper.WorkUaJobScraper;
+import com.valdisdot.jobscrapper.service.JobPositionPuller;
+import com.valdisdot.jobscrapper.source.DjiniUaJobPositionSource;
+import com.valdisdot.jobscrapper.source.JobPositionSource;
+import com.valdisdot.jobscrapper.source.WorkUaJobPositionSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -48,27 +51,43 @@ public class Start {
                     Arrays.stream(properties.getProperty("allowed_users").split(",")).map(String::trim).toList()
             );
 
-            Collection<WorkUaJobScraper> workUaJobScrapers = new LinkedList<>();
+            Collection<JobPositionSource> jobPositionSources = new LinkedList<>();
+
             for (String workUaVacancyPath : properties.getProperty("work_ua_vacancies_paths").split(",")) {
                 String tag = workUaVacancyPath.replaceAll("[^0-9a-zA-Zа-яА-ЯїЇіІєЄёЁ]", "_").trim();
                 tag = tag.isBlank() ? "#work_ua_job_positions" : "#" + tag;
-                WorkUaJobScraper workUaJobScraper = new WorkUaJobScraper(
-                        workUaVacancyPath,
+                WorkUaJobPositionSource workUaJobScraper = new WorkUaJobPositionSource(
                         tag,
+                        workUaVacancyPath,
                         Integer.parseInt(properties.getProperty("scraping_pages", "10")),
-                        telegramBotJobPositionConsumer,
                         exclusionService,
                         processedUrlService
                 );
-                mainScheduler.scheduleAtFixedRate(
-                        workUaJobScraper,
-                        0,
-                        Integer.parseInt(properties.getProperty("scraping_interval", "15")),
-                        TimeUnit.MINUTES
-                );
-                workUaJobScrapers.add(workUaJobScraper);
-                telegramBotJobPositionConsumer.addJobPositionFinder(workUaJobScraper);
+                jobPositionSources.add(workUaJobScraper);
             }
+
+            for (String djiniUaVacancyPath : properties.getProperty("djini_ua_vacancies_paths").split(",")) {
+                String tag = djiniUaVacancyPath.replaceAll("[^0-9a-zA-Zа-яА-ЯїЇіІєЄёЁ]", "_").trim();
+                tag = tag.isBlank() ? "#djini_ua_job_positions" : "#" + tag;
+                DjiniUaJobPositionSource workUaJobScraper = new DjiniUaJobPositionSource(
+                        tag,
+                        djiniUaVacancyPath,
+                        Integer.parseInt(properties.getProperty("scraping_pages", "10")),
+                        exclusionService,
+                        processedUrlService
+                );
+                jobPositionSources.add(workUaJobScraper);
+            }
+
+            JobPositionPuller jobPositionPuller = new JobPositionPuller(telegramBotJobPositionConsumer, jobPositionSources);
+            telegramBotJobPositionConsumer.addJobPositionFinder(jobPositionPuller);
+
+            mainScheduler.scheduleAtFixedRate(
+                    jobPositionPuller,
+                    0,
+                    Integer.parseInt(properties.getProperty("scraping_interval", "15")),
+                    TimeUnit.MINUTES
+            );
 
             mainScheduler.scheduleAtFixedRate(
                     () -> {
@@ -82,7 +101,7 @@ public class Start {
 
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 logger.warn("Shutting down...");
-                workUaJobScrapers.forEach(WorkUaJobScraper::close);
+                jobPositionPuller.close();
                 telegramBotJobPositionConsumer.stop();
                 scheduledExecutorServices.forEach(ExecutorService::shutdownNow);
                 exclusionService.persist();
