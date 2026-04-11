@@ -1,4 +1,4 @@
- #!/bin/bash
+#!/bin/bash
 
 # Configuration variables
 SERVER_ALIAS="server-aws"
@@ -10,6 +10,7 @@ SYSTEMD_SERVICE="job_scrapper"
 SLEEP_TIME=10
 
 # Deployment options (set to 0 to disable)
+INCLUDE_CONFIG_FILE=0
 INCLUDE_PROCESSING_FILES=0
 CREATE_SERVICE=0
 
@@ -27,8 +28,10 @@ echo "Deploying JAR file..."
 scp ./target/${JAR_FILE} ${SERVER_ALIAS}:${REMOTE_DIR}/${REMOTE_JAR}
 
 # Deploy configuration files
-echo "Deploying configuration files..."
-scp ./${PROPERTIES_FILE} ${SERVER_ALIAS}:${REMOTE_DIR}/${PROPERTIES_FILE}
+if [ "${INCLUDE_CONFIG_FILE}" -ne 0 ]; then
+    echo "Deploying configuration files..."
+    scp ./${PROPERTIES_FILE} ${SERVER_ALIAS}:${REMOTE_DIR}/${PROPERTIES_FILE}
+fi
 
 # Deploy processing files if enabled
 if [ "${INCLUDE_PROCESSING_FILES}" -ne 0 ]; then
