@@ -54,4 +54,14 @@ public abstract class JobPositionSource {
     }
 
     public abstract Iterator<Collection<JobPosition>> iterateJobPositions();
+
+    public static class SourceException extends RuntimeException {
+        public SourceException(String message) {
+            super(message);
+        }
+
+        public SourceException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
 }
