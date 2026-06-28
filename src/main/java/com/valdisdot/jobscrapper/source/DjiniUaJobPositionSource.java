@@ -4,6 +4,7 @@ import com.valdisdot.jobscrapper.JobPosition;
 import com.valdisdot.jobscrapper.exclusion.ExclusionService;
 import com.valdisdot.jobscrapper.processed.ProcessedUrlService;
 import org.openqa.selenium.By;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
@@ -23,7 +24,8 @@ public class DjiniUaJobPositionSource extends JobPositionSource {
 
     private class DjiniUaJobPositionIterator implements Iterator<Collection<JobPosition>> {
         private int currentPage = maxPages;
-        private final WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        private final int waitSeconds = 10;
+        private final WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(this.waitSeconds));
 
         @Override
         public boolean hasNext() {
@@ -42,6 +44,10 @@ public class DjiniUaJobPositionSource extends JobPositionSource {
                 wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("main [id]")));
                 Thread.sleep(2000);
 
+                if (!pageUrl.equalsIgnoreCase(driver.getCurrentUrl())) {
+                    throw new JobPositionSource.SourceException(String.format("URL '%s' does not match expected url '%s' (may be redirected), skipping", driver.getCurrentUrl(), pageUrl));
+                }
+
                 List<WebElement> jobDivs = driver.findElements(By.cssSelector("main [id]"));
 
                 logger.info("Elements to process: {}", jobDivs.size());
@@ -56,6 +62,12 @@ public class DjiniUaJobPositionSource extends JobPositionSource {
                         }
 
                         String href = link.getAttribute("href");
+
+                        if (href == null) continue;
+
+                        //djini started to add tracking rubbish that makes position url not unique
+                        href = href.split("/?")[0];
+
                         if (processedUrlService.isProcessed(href)) continue;
 
                         WebElement titleElement = jobDiv.findElement(By.cssSelector("h2"));
@@ -96,10 +108,15 @@ public class DjiniUaJobPositionSource extends JobPositionSource {
                     }
                 }
             } catch (InterruptedException e) {
-                logger.error("Thread was interrupted", e);
+                logger.error("Thread was interrupted, cancelling...");
                 Thread.currentThread().interrupt();
+                currentPage = 0;
+            } catch (TimeoutException e) {
+                logger.info("Page was not loaded or page content conditions was not met in {} seconds, skipping...", this.waitSeconds);
+            } catch (JobPositionSource.SourceException e) {
+                logger.warn(e.getMessage());
             } catch (Exception e) {
-                logger.error("Error during processing job listing page {}", currentPage, e);
+                logger.error("Error during processing job listing page '{}', skipping...", currentPage, e);
             }
 
             currentPage--;
