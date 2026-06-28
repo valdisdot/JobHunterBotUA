@@ -66,7 +66,7 @@ public class DjiniUaJobPositionSource extends JobPositionSource {
                         if (href == null) continue;
 
                         //djini started to add tracking rubbish that makes position url not unique
-                        href = href.split("/?")[0];
+                        href = href.split("/\\?")[0];
 
                         if (processedUrlService.isProcessed(href)) continue;
 
