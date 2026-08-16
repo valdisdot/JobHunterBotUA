@@ -4,6 +4,8 @@ import com.valdisdot.jobscrapper.JobPosition;
 import com.valdisdot.jobscrapper.exclusion.ExclusionService;
 import com.valdisdot.jobscrapper.processed.ProcessedUrlService;
 import org.openqa.selenium.By;
+import org.openqa.selenium.TimeoutException;
+import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
@@ -15,8 +17,8 @@ import java.util.LinkedList;
 import java.util.List;
 
 public class WorkUaJobPositionSource extends JobPositionSource {
-    public WorkUaJobPositionSource(String tag, String urlFilter, int maxPages, ExclusionService exclusionService, ProcessedUrlService processedUrlService) {
-        super(tag, "https://www.work.ua/" + urlFilter, maxPages, exclusionService, processedUrlService);
+    public WorkUaJobPositionSource(WebDriver webDriver, String tag, String urlFilter, int maxPages, ExclusionService exclusionService, ProcessedUrlService processedUrlService) {
+        super(webDriver, tag, "https://www.work.ua/" + urlFilter, maxPages, exclusionService, processedUrlService);
     }
 
     @Override
@@ -81,7 +83,7 @@ public class WorkUaJobPositionSource extends JobPositionSource {
                                     WebElement secondSibling = null;
                                     try {
                                         secondSibling = jobDiv.findElement(
-                                                By.cssSelector("div:has(h2) + div > span")
+                                                By.cssSelector("div:has(h2) + div > div > span:nth-of-type(2)")
                                         );
                                     } catch (Exception ignored) {
                                     }
@@ -93,7 +95,7 @@ public class WorkUaJobPositionSource extends JobPositionSource {
                                             WebElement thirdSibling = null;
                                             try {
                                                 thirdSibling = jobDiv.findElement(
-                                                        By.cssSelector("div:has(h2) + div + div > span > span")
+                                                        By.cssSelector("div:has(h2) + div + div > div > span:nth-of-type(2)")
                                                 );
                                             } catch (Exception ignored) {
                                             }
@@ -127,10 +129,15 @@ public class WorkUaJobPositionSource extends JobPositionSource {
                     }
                 }
             } catch (InterruptedException e) {
-                logger.error("Thread was interrupted", e);
+                logger.error("Thread was interrupted, cancelling...");
                 Thread.currentThread().interrupt();
+                currentPage = 0;
+            } catch (TimeoutException e) {
+                logger.info("Page was not loaded or page content conditions was not met in {} seconds, skipping...", 20);
+            } catch (JobPositionSource.SourceException e) {
+                logger.warn(e.getMessage());
             } catch (Exception e) {
-                logger.error("Error during processing job listing page {}", currentPage, e);
+                logger.error("Error during processing job listing page '{}', skipping...", currentPage, e);
             }
 
             currentPage--;
