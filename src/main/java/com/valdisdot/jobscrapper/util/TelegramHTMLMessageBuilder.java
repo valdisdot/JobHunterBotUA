@@ -1,4 +1,4 @@
-package com.valdisdot.jobscrapper.consumer;
+package com.valdisdot.jobscrapper.util;
 
 import com.valdisdot.jobscrapper.JobPosition;
 

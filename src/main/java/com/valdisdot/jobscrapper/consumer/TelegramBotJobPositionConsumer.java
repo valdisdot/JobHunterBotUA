@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.valdisdot.jobscrapper.JobPosition;
 import com.valdisdot.jobscrapper.exclusion.ExclusionService;
 import com.valdisdot.jobscrapper.processed.ProcessedUrlService;
+import com.valdisdot.jobscrapper.util.TelegramHTMLMessageBuilder;
 import okhttp3.OkHttpClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
