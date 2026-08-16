@@ -10,8 +10,6 @@ import org.apache.logging.log4j.Logger;
 import org.telegram.telegrambots.client.okhttp.OkHttpTelegramClient;
 import org.telegram.telegrambots.longpolling.TelegramBotsLongPollingApplication;
 import org.telegram.telegrambots.longpolling.interfaces.LongPollingUpdateConsumer;
-import org.telegram.telegrambots.longpolling.util.DefaultGetUpdatesGenerator;
-import org.telegram.telegrambots.longpolling.util.LongPollingSingleThreadUpdateConsumer;
 import org.telegram.telegrambots.longpolling.util.TelegramOkHttpClientFactory;
 import org.telegram.telegrambots.meta.TelegramUrl;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -20,12 +18,12 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.generics.TelegramClient;
 
-import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
+import java.time.Duration;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -49,6 +47,8 @@ public class TelegramBotJobPositionConsumer implements JobPositionConsumer, Long
     private final ExclusionService exclusionService;
     private final ProcessedUrlService processedUrlService;
     private final Collection<String> allowedUsers;
+
+    private final ConcurrentHashMap<String, ConcurrentLinkedDeque<JobPosition>> queue;
 
     private final List<Runnable> jobPositionFinders;
     private final ScheduledExecutorService internalExecutorService;
@@ -88,8 +88,11 @@ public class TelegramBotJobPositionConsumer implements JobPositionConsumer, Long
             this.exclusionService = exclusionService;
             this.processedUrlService = processedUrlService;
             this.allowedUsers = allowedUsers;
+            this.queue = new ConcurrentHashMap<>();
+            for (String allowedUser : allowedUsers) this.queue.put(allowedUser, new ConcurrentLinkedDeque<>());
             this.jobPositionFinders = new LinkedList<>();
             this.internalExecutorService = scheduledExecutorServiceSupplier.get();
+            this.internalExecutorService.scheduleAtFixedRate(this::iterateMessageQueue, 2, 1, TimeUnit.SECONDS);
 
             this.helpBody = new TelegramHTMLMessageBuilder()
                     .append("Available commands:").ln()
@@ -108,18 +111,47 @@ public class TelegramBotJobPositionConsumer implements JobPositionConsumer, Long
         }
     }
 
+    private static void sleep(long nanos) {
+        try {
+            Thread.sleep(Duration.ofNanos(nanos));
+        } catch (InterruptedException ignored) {}
+    }
+
+    //1 message to 1 chat is allowed so call it each 1 second (for wost scenario where there is only one allowedChat)
+    public void iterateMessageQueue() {
+        long startTime = System.nanoTime();
+        int messagesSent = 0;
+
+        for (String userChatId : allowedUsers) {
+            JobPosition jobPosition = queue.get(userChatId).poll();
+            if (jobPosition != null) {
+                try {
+                    client.execute(SendMessage.builder()
+                            .parseMode("HTML")
+                            .text(TelegramHTMLMessageBuilder.format(jobPosition))
+                            .chatId(userChatId)
+                            .build()
+                    );
+                } catch (TelegramApiException e) {
+                    logger.warn("Cannot send the message with job position", e);
+                    queue.get(userChatId).addFirst(jobPosition);
+                }
+                //increment the counter in both normal flow and error
+                ++messagesSent;
+
+                //made 30 messages
+                if (messagesSent % 30 == 0) {
+                    //sleep 1 second - spent time
+                    sleep(1000000000 + startTime - System.nanoTime());
+                }
+            }
+        }
+    }
+
     @Override
     public void accept(JobPosition jobPosition) {
-        try {
-            for (String userChatId : allowedUsers)
-                client.execute(SendMessage.builder()
-                        .parseMode("HTML")
-                        .text(TelegramHTMLMessageBuilder.format(jobPosition))
-                        .chatId(userChatId)
-                        .build()
-                );
-        } catch (TelegramApiException e) {
-            logger.error("Error occurred while sending job position", e);
+        for (String userChatId : allowedUsers) {
+            this.queue.get(userChatId).addLast(jobPosition);
         }
     }
 
