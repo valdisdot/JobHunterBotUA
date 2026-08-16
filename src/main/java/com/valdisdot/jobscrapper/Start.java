@@ -4,16 +4,17 @@ import com.valdisdot.jobscrapper.consumer.TelegramBotJobPositionConsumer;
 import com.valdisdot.jobscrapper.exclusion.InFileExclusionService;
 import com.valdisdot.jobscrapper.processed.InFileProcessedUrlService;
 import com.valdisdot.jobscrapper.service.JobPositionPuller;
-import com.valdisdot.jobscrapper.source.DjiniUaJobPositionSource;
-import com.valdisdot.jobscrapper.source.JobPositionSource;
-import com.valdisdot.jobscrapper.source.WorkUaJobPositionSource;
+import com.valdisdot.jobscrapper.source.*;
+import com.valdisdot.jobscrapper.util.WebDriverFactories;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.openqa.selenium.WebDriver;
 
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Supplier;
 
 /**
  * Main entry point for the Job Hunter Bot application.
@@ -35,7 +36,7 @@ public class Start {
             properties.load(applicationProperties);
 
             List<ScheduledExecutorService> scheduledExecutorServices = new LinkedList<>();
-            ScheduledExecutorService mainScheduler = Executors.newScheduledThreadPool(properties.getProperty("work_ua_vacancies_paths").split(",").length + 1);
+            ScheduledExecutorService mainScheduler = Executors.newScheduledThreadPool(4);
             scheduledExecutorServices.add(mainScheduler);
             InFileExclusionService exclusionService = new InFileExclusionService(properties.getProperty("exclusion_path", "exclusion.txt"));
             InFileProcessedUrlService processedUrlService = new InFileProcessedUrlService(properties.getProperty("processed_path", "processed.txt"));
@@ -52,31 +53,61 @@ public class Start {
             );
 
             Collection<JobPositionSource> jobPositionSources = new LinkedList<>();
+            Supplier<WebDriver> webDriverFactory = WebDriverFactories.webDriver(properties.getProperty("browser"));
 
-            for (String workUaVacancyPath : properties.getProperty("work_ua_vacancies_paths").split(",")) {
-                String tag = workUaVacancyPath.replaceAll("[^0-9a-zA-Zа-яА-ЯїЇіІєЄёЁ]", "_").trim();
-                tag = tag.isBlank() ? "#work_ua_job_positions" : "#" + tag;
-                WorkUaJobPositionSource workUaJobScraper = new WorkUaJobPositionSource(
-                        tag,
-                        workUaVacancyPath,
-                        Integer.parseInt(properties.getProperty("scraping_pages", "10")),
-                        exclusionService,
-                        processedUrlService
-                );
-                jobPositionSources.add(workUaJobScraper);
-            }
+            if (properties.containsKey("work_ua_vacancies_paths"))
+                for (String workUaVacancyPath : properties.getProperty("work_ua_vacancies_paths").split(",")) {
+                    String tag = workUaVacancyPath.replaceAll("[^0-9a-zA-Zа-яА-ЯїЇіІєЄёЁ]", "_").trim();
+                    if (!tag.isEmpty()) {
+                        tag = tag.isBlank() ? "#work_ua_job_positions" : "#" + tag;
+                        WorkUaJobPositionSource workUaJobScraper = new WorkUaJobPositionSource(
+                                webDriverFactory.get(),
+                                tag,
+                                workUaVacancyPath,
+                                Integer.parseInt(properties.getProperty("scraping_pages", "10")),
+                                exclusionService,
+                                processedUrlService
+                        );
+                        jobPositionSources.add(workUaJobScraper);
+                    }
+                }
 
-            for (String djiniUaVacancyPath : properties.getProperty("djini_ua_vacancies_paths").split(",")) {
-                String tag = djiniUaVacancyPath.replaceAll("[^0-9a-zA-Zа-яА-ЯїЇіІєЄёЁ]", "_").trim();
-                tag = tag.isBlank() ? "#djini_ua_job_positions" : "#" + tag;
-                DjiniUaJobPositionSource workUaJobScraper = new DjiniUaJobPositionSource(
-                        tag,
-                        djiniUaVacancyPath,
-                        Integer.parseInt(properties.getProperty("scraping_pages", "10")),
-                        exclusionService,
-                        processedUrlService
-                );
-                jobPositionSources.add(workUaJobScraper);
+            if (properties.containsKey("djini_ua_vacancies_paths"))
+                for (String djiniUaVacancyPath : properties.getProperty("djini_ua_vacancies_paths").split(",")) {
+                    String tag = djiniUaVacancyPath.replaceAll("[^0-9a-zA-Zа-яА-ЯїЇіІєЄёЁ]", "_").trim();
+                    if (!tag.isEmpty()) {
+                        tag = tag.isBlank() ? "#djini_ua_job_positions" : "#" + tag;
+                        DjiniUaJobPositionSource workUaJobScraper = new DjiniUaJobPositionSource(
+                                webDriverFactory.get(),
+                                tag,
+                                djiniUaVacancyPath,
+                                Integer.parseInt(properties.getProperty("scraping_pages", "10")),
+                                exclusionService,
+                                processedUrlService
+                        );
+                        jobPositionSources.add(workUaJobScraper);
+                    }
+                }
+
+            if (properties.containsKey("dou_ua_vacancies_paths"))
+                for (String douUaVacancyPath : properties.getProperty("dou_ua_vacancies_paths").split(",")) {
+                    String tag = douUaVacancyPath.replaceAll("[^0-9a-zA-Zа-яА-ЯїЇіІєЄёЁ]", "_").trim();
+                    if (!tag.isEmpty()) {
+                        tag = tag.isBlank() ? "#dou_ua_job_positions" : "#" + tag;
+                        DouUaJobPositionSource workUaJobScraper = new DouUaJobPositionSource(
+                                webDriverFactory.get(),
+                                tag,
+                                douUaVacancyPath,
+                                Integer.parseInt(properties.getProperty("scraping_pages", "10")),
+                                exclusionService,
+                                processedUrlService
+                        );
+                        jobPositionSources.add(workUaJobScraper);
+                    }
+                }
+
+            if (jobPositionSources.isEmpty()) {
+                throw new RuntimeException("No job position sources were specified!");
             }
 
             JobPositionPuller jobPositionPuller = new JobPositionPuller(telegramBotJobPositionConsumer, jobPositionSources);
