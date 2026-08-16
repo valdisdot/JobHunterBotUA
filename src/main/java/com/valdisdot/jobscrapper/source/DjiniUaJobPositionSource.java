@@ -5,6 +5,7 @@ import com.valdisdot.jobscrapper.exclusion.ExclusionService;
 import com.valdisdot.jobscrapper.processed.ProcessedUrlService;
 import org.openqa.selenium.By;
 import org.openqa.selenium.TimeoutException;
+import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
@@ -13,8 +14,8 @@ import java.time.Duration;
 import java.util.*;
 
 public class DjiniUaJobPositionSource extends JobPositionSource {
-    public DjiniUaJobPositionSource(String tag, String vacanciesUrl, int maxPages, ExclusionService exclusionService, ProcessedUrlService processedUrlService) {
-        super(tag, "https://djinni.co/jobs/?" + vacanciesUrl, maxPages, exclusionService, processedUrlService);
+    public DjiniUaJobPositionSource(WebDriver webDriver, String tag, String vacanciesUrl, int maxPages, ExclusionService exclusionService, ProcessedUrlService processedUrlService) {
+        super(webDriver, tag, "https://djinni.co/jobs/?" + vacanciesUrl, maxPages, exclusionService, processedUrlService);
     }
 
     @Override
