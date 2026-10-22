@@ -27,11 +27,6 @@ public abstract class JobPositionSource {
         this.driver = driver;
     }
 
-    public void close() {
-        driver.manage().deleteAllCookies();
-        driver.quit();
-    }
-
     public abstract Iterator<Collection<JobPosition>> iterateJobPositions();
 
     public static class SourceException extends RuntimeException {

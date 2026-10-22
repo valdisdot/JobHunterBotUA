@@ -22,8 +22,4 @@ public class JobPositionPuller implements Runnable {
             }
         });
     }
-
-    public void close() {
-        jobPositionSources.forEach(JobPositionSource::close);
-    }
 }
