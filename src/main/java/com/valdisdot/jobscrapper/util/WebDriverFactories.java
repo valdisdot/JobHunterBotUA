@@ -18,9 +18,11 @@ public class WebDriverFactories {
                 case "chrome": {
                     return () -> {
                         ChromeOptions options = new ChromeOptions();
-                        options.addArguments("--headless=new");
+
+                        options.addArguments("--headless");
                         options.addArguments("--no-sandbox");
-                        options.addArguments("--window-size=1920,1080");
+                        options.addArguments("--incognito");
+                        options.addArguments("--disable-dev-shm-usage");
                         options.addArguments("--disable-gpu");
                         options.setPageLoadStrategy(PageLoadStrategy.EAGER);
 
@@ -28,7 +30,7 @@ public class WebDriverFactories {
 
                         driver.manage().timeouts().pageLoadTimeout(Duration.ofSeconds(30));
                         driver.manage().timeouts().scriptTimeout(Duration.ofSeconds(30));
-                        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(1));
+                        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(0));
                         driver.manage().window().setSize(new Dimension(1920, 1080));
                         return driver;
                     };
@@ -37,9 +39,8 @@ public class WebDriverFactories {
                 case "firefox": {
                     return () -> {
                         FirefoxOptions options = new FirefoxOptions();
-                        options.addArguments("--headless");
-                        options.addArguments("--width=1920");
-                        options.addArguments("--height=1080");
+                        options.addArguments("-headless");
+                        options.addArguments("-private");
                         options.setPageLoadStrategy(PageLoadStrategy.EAGER);
 
                         FirefoxDriver driver = new FirefoxDriver(options);
