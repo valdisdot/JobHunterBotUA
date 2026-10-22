@@ -14,7 +14,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Supplier;
 
 /**
  * Main entry point for the Job Hunter Bot application.
@@ -53,7 +52,7 @@ public class Start {
             );
 
             Collection<JobPositionSource> jobPositionSources = new LinkedList<>();
-            Supplier<WebDriver> webDriverFactory = WebDriverFactories.webDriver(properties.getProperty("browser"));
+            WebDriver webDriver = WebDriverFactories.webDriver(properties.getProperty("browser")).get();
 
             if (properties.containsKey("work_ua_vacancies_paths"))
                 for (String workUaVacancyPath : properties.getProperty("work_ua_vacancies_paths").split(",")) {
@@ -61,7 +60,7 @@ public class Start {
                     if (!tag.isEmpty()) {
                         tag = tag.isBlank() ? "#work_ua_job_positions" : "#" + tag;
                         WorkUaJobPositionSource workUaJobScraper = new WorkUaJobPositionSource(
-                                webDriverFactory.get(),
+                                webDriver,
                                 tag,
                                 workUaVacancyPath,
                                 Integer.parseInt(properties.getProperty("scraping_pages", "10")),
@@ -78,7 +77,7 @@ public class Start {
                     if (!tag.isEmpty()) {
                         tag = tag.isBlank() ? "#djini_ua_job_positions" : "#" + tag;
                         DjiniUaJobPositionSource workUaJobScraper = new DjiniUaJobPositionSource(
-                                webDriverFactory.get(),
+                                webDriver,
                                 tag,
                                 djiniUaVacancyPath,
                                 Integer.parseInt(properties.getProperty("scraping_pages", "10")),
@@ -95,7 +94,7 @@ public class Start {
                     if (!tag.isEmpty()) {
                         tag = tag.isBlank() ? "#dou_ua_job_positions" : "#" + tag;
                         DouUaJobPositionSource workUaJobScraper = new DouUaJobPositionSource(
-                                webDriverFactory.get(),
+                                webDriver,
                                 tag,
                                 douUaVacancyPath,
                                 Integer.parseInt(properties.getProperty("scraping_pages", "10")),
@@ -132,7 +131,8 @@ public class Start {
 
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 logger.warn("Shutting down...");
-                jobPositionPuller.close();
+                webDriver.quit();
+                webDriver.close();
                 telegramBotJobPositionConsumer.stop();
                 scheduledExecutorServices.forEach(ExecutorService::shutdownNow);
                 exclusionService.persist();
